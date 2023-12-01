@@ -20,18 +20,27 @@ def pi(z, cones):
     `cones` represents a convex cone K, and K^* is its dual cone.
     """
     u, v, w = z
-    return np.concatenate(
-        [u, cone_lib.pi(v, cones, dual=True), np.maximum(w, 0)])
+    return np.concatenate([u, cone_lib.pi(v, cones, dual=True), np.maximum(w, 0)])
 
 
 def solve_and_derivative_wrapper(A, b, c, cone_dict, warm_start, mode, kwargs):
     """A wrapper around solve_and_derivative for the batch function."""
     return solve_and_derivative(
-        A, b, c, cone_dict, warm_start=warm_start, mode=mode, **kwargs)
+        A, b, c, cone_dict, warm_start=warm_start, mode=mode, **kwargs
+    )
 
 
-def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs_backward=-1,
-                               mode="lsqr", warm_starts=None, **kwargs):
+def solve_and_derivative_batch(
+    As,
+    bs,
+    cs,
+    cone_dicts,
+    n_jobs_forward=-1,
+    n_jobs_backward=-1,
+    mode="lsqr",
+    warm_starts=None,
+    **kwargs
+):
     """
     Solves a batch of cone programs and returns a function that
     performs a batch of derivatives. Uses a ThreadPool to perform
@@ -73,13 +82,13 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
         n_jobs_backward = mp.cpu_count()
     n_jobs_forward = min(batch_size, n_jobs_forward)
     n_jobs_backward = min(batch_size, n_jobs_backward)
-
     if n_jobs_forward == 1:
         # serial
         xs, ys, ss, Ds, DTs = [], [], [], [], []
         for i in range(batch_size):
-            x, y, s, D, DT = solve_and_derivative(As[i], bs[i], cs[i],
-                                                  cone_dicts[i], warm_starts[i], mode=mode, **kwargs)
+            x, y, s, D, DT = solve_and_derivative(
+                As[i], bs[i], cs[i], cone_dicts[i], warm_starts[i], mode=mode, **kwargs
+            )
             xs += [x]
             ys += [y]
             ss += [s]
@@ -88,8 +97,12 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
     else:
         # thread pool
         pool = ThreadPool(processes=n_jobs_forward)
-        args = [(A, b, c, cone_dict, warm_start, mode, kwargs) for A, b, c, cone_dict, warm_start in
-                zip(As, bs, cs, cone_dicts, warm_starts)]
+        args = [
+            (A, b, c, cone_dict, warm_start, mode, kwargs)
+            for A, b, c, cone_dict, warm_start in zip(
+                As, bs, cs, cone_dicts, warm_starts
+            )
+        ]
         with threadpool_limits(limits=1):
             results = pool.starmap(solve_and_derivative_wrapper, args)
         pool.close()
@@ -100,6 +113,7 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
         DTs = [r[4] for r in results]
 
     if n_jobs_backward == 1:
+
         def D_batch(dAs, dbs, dcs, **kwargs):
             dxs, dys, dss = [], [], []
             for i in range(batch_size):
@@ -117,6 +131,7 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
                 dbs += [db]
                 dcs += [dc]
             return dAs, dbs, dcs
+
     else:
 
         def D_batch(dAs, dbs, dcs, **kwargs):
@@ -124,6 +139,7 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
 
             def Di(i):
                 return Ds[i](dAs[i], dbs[i], dcs[i], **kwargs)
+
             results = pool.map(Di, range(batch_size))
             pool.close()
             dxs = [r[0] for r in results]
@@ -136,6 +152,7 @@ def solve_and_derivative_batch(As, bs, cs, cone_dicts, n_jobs_forward=-1, n_jobs
 
             def DTi(i):
                 return DTs[i](dxs[i], dys[i], dss[i], **kwargs)
+
             results = pool.map(DTi, range(batch_size))
             pool.close()
             dAs = [r[0] for r in results]
@@ -150,8 +167,9 @@ class SolverError(Exception):
     pass
 
 
-def solve_and_derivative(A, b, c, cone_dict, warm_start=None, mode='lsqr',
-                         solve_method='SCS', **kwargs):
+def solve_and_derivative(
+    A, b, c, cone_dict, warm_start=None, mode="lsqr", solve_method="SCS", **kwargs
+):
     """Solves a cone program, returns its derivative as an abstract linear map.
 
     This function solves a convex cone program, with primal-dual problems
@@ -215,8 +233,15 @@ def solve_and_derivative(A, b, c, cone_dict, warm_start=None, mode='lsqr',
         SolverError: if the cone program is infeasible or unbounded.
     """
     result = solve_and_derivative_internal(
-        A, b, c, cone_dict, warm_start=warm_start, mode=mode,
-        solve_method=solve_method, **kwargs)
+        A,
+        b,
+        c,
+        cone_dict,
+        warm_start=warm_start,
+        mode=mode,
+        solve_method=solve_method,
+        **kwargs
+    )
     x = result["x"]
     y = result["y"]
     s = result["s"]
@@ -225,11 +250,22 @@ def solve_and_derivative(A, b, c, cone_dict, warm_start=None, mode='lsqr',
     return x, y, s, D, DT
 
 
-def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
-        warm_start=None, mode='lsqr', raise_on_error=True, **kwargs):
+def solve_and_derivative_internal(
+    A,
+    b,
+    c,
+    cone_dict,
+    solve_method=None,
+    warm_start=None,
+    mode="lsqr",
+    raise_on_error=True,
+    **kwargs
+):
     if mode not in ["dense", "lsqr", "lsmr"]:
-        raise ValueError("Unsupported mode {}; the supported modes are "
-                         "'dense', 'lsqr' and 'lsmr'".format(mode))
+        raise ValueError(
+            "Unsupported mode {}; the supported modes are "
+            "'dense', 'lsqr' and 'lsmr'".format(mode)
+        )
 
     if np.isnan(A.data).any():
         raise RuntimeError("Found a NaN in A.")
@@ -247,8 +283,8 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
     A.eliminate_zeros()
 
     if solve_method is None:
-        psd_cone = ('s' in cone_dict) and (cone_dict['s'] != [])
-        ed_cone = ('ed' in cone_dict) and (cone_dict['ed'] != 0)
+        psd_cone = ("s" in cone_dict) and (cone_dict["s"] != [])
+        ed_cone = ("ed" in cone_dict) and (cone_dict["ed"] != 0)
 
         # TODO(sbarratt): consider setting default to clarabel
         if psd_cone or ed_cone:
@@ -257,13 +293,11 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
             solve_method = "ECOS"
 
     if solve_method == "SCS":
-
         # SCS versions SCS 2.*
-        if StrictVersion(scs.__version__) < StrictVersion('3.0.0'):
+        if StrictVersion(scs.__version__) < StrictVersion("3.0.0"):
             if "eps_abs" in kwargs or "eps_rel" in kwargs:
                 # Take the min of eps_rel and eps_abs to be eps
-                kwargs["eps"] = min(kwargs.get("eps_abs", 1),
-                                    kwargs.get("eps_rel", 1))
+                kwargs["eps"] = min(kwargs.get("eps_abs", 1), kwargs.get("eps_rel", 1))
 
         # SCS version 3.*
         else:
@@ -272,11 +306,7 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
                 kwargs["eps_rel"] = kwargs["eps"]
                 del kwargs["eps"]
 
-        data = {
-            "A": A,
-            "b": b,
-            "c": c
-        }
+        data = {"A": A, "b": b, "c": c}
 
         if warm_start is not None:
             data["x"] = warm_start[0]
@@ -287,11 +317,13 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
         result = scs.solve(data, cone_dict, **kwargs)
 
         status = result["info"]["status"]
-        inaccurate_status = {"Solved/Inaccurate", "solved (inaccurate - reached max_iters)"}
+        inaccurate_status = {
+            "Solved/Inaccurate",
+            "solved (inaccurate - reached max_iters)",
+        }
         if status in inaccurate_status and "acceleration_lookback" not in kwargs:
             # anderson acceleration is sometimes unstable
-            result = scs.solve(
-                data, cone_dict, acceleration_lookback=0, **kwargs)
+            result = scs.solve(data, cone_dict, acceleration_lookback=0, **kwargs)
             status = result["info"]["status"]
 
         if status in inaccurate_status:
@@ -310,10 +342,10 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
 
     elif solve_method == "ECOS":
         if warm_start is not None:
-            raise ValueError('ECOS does not support warmstart.')
-        if ('s' in cone_dict) and (cone_dict['s'] != []):
+            raise ValueError("ECOS does not support warmstart.")
+        if ("s" in cone_dict) and (cone_dict["s"] != []):
             raise ValueError("PSD cone not supported by ECOS.")
-        if ('ed' in cone_dict) and (cone_dict['ed'] != 0):
+        if ("ed" in cone_dict) and (cone_dict["ed"] != 0):
             raise NotImplementedError("Dual exponential cones not supported yet.")
         if warm_start is not None:
             raise ValueError("ECOS does not support warm starting.")
@@ -333,62 +365,79 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
             B_ecos = None
 
         cone_dict_ecos = {}
-        if 'l' in cone_dict:
-            cone_dict_ecos['l'] = cone_dict['l']
-        if 'q' in cone_dict:
-            cone_dict_ecos['q'] = cone_dict['q']
-        if 'ep' in cone_dict:
-            cone_dict_ecos['e'] = cone_dict['ep']
+        if "l" in cone_dict:
+            cone_dict_ecos["l"] = cone_dict["l"]
+        if "q" in cone_dict:
+            cone_dict_ecos["q"] = cone_dict["q"]
+        if "ep" in cone_dict:
+            cone_dict_ecos["e"] = cone_dict["ep"]
             # Only necessary if any exponential cones are present.
-            if cone_dict['ep'] > 0:
+            if cone_dict["ep"] > 0:
                 # flip G and H from SCS- to ECOS- convention
                 G_ecos = G_ecos.tolil()
-                for ep in range(cone_dict['ep']):
-                    G_ecos[-(ep+1)*3+1, :], G_ecos[-(ep+1)*3+2, :] = G_ecos[-(ep+1)*3+2, :], G_ecos[-(ep+1)*3+1, :]
-                    H_ecos[-(ep+1)*3+1], H_ecos[-(ep+1)*3+2] = H_ecos[-(ep+1)*3+2], H_ecos[-(ep+1)*3+1]
+                for ep in range(cone_dict["ep"]):
+                    G_ecos[-(ep + 1) * 3 + 1, :], G_ecos[-(ep + 1) * 3 + 2, :] = (
+                        G_ecos[-(ep + 1) * 3 + 2, :],
+                        G_ecos[-(ep + 1) * 3 + 1, :],
+                    )
+                    H_ecos[-(ep + 1) * 3 + 1], H_ecos[-(ep + 1) * 3 + 2] = (
+                        H_ecos[-(ep + 1) * 3 + 2],
+                        H_ecos[-(ep + 1) * 3 + 1],
+                    )
                 G_ecos = G_ecos.tocsc()
         if A_ecos is not None and A_ecos.nnz == 0 and np.prod(A_ecos.shape) > 0:
             raise ValueError("ECOS cannot handle sparse data with nnz == 0.")
 
         kwargs.setdefault("verbose", False)
-        solution = ecos.solve(C_ecos, G_ecos, H_ecos,
-                              cone_dict_ecos, A_ecos, B_ecos, **kwargs)
+        solution = ecos.solve(
+            C_ecos, G_ecos, H_ecos, cone_dict_ecos, A_ecos, B_ecos, **kwargs
+        )
         x = solution["x"]
         y = np.append(solution["y"], solution["z"])
-        if 'ep' in cone_dict:
+        if "ep" in cone_dict:
             # flip y from ECOS- to SCS- convention
-            for ep in range(cone_dict['ep']):
-                y[-(ep+1)*3+1], y[-(ep+1)*3+2] = y[-(ep+1)*3+2], y[-(ep+1)*3+1]
+            for ep in range(cone_dict["ep"]):
+                y[-(ep + 1) * 3 + 1], y[-(ep + 1) * 3 + 2] = (
+                    y[-(ep + 1) * 3 + 2],
+                    y[-(ep + 1) * 3 + 1],
+                )
         s = b - A @ x
 
-        result = {
-            "x": x,
-            "y": y,
-            "s": s
-        }
+        result = {"x": x, "y": y, "s": s}
         status = solution["info"]["exitFlag"]
-        STATUS_LOOKUP = {0: "Optimal", 1: "Infeasible", 2: "Unbounded", 10: "Optimal Inaccurate",
-                         11: "Infeasible Inaccurate", 12: "Unbounded Inaccurate"}
+        STATUS_LOOKUP = {
+            0: "Optimal",
+            1: "Infeasible",
+            2: "Unbounded",
+            10: "Optimal Inaccurate",
+            11: "Infeasible Inaccurate",
+            12: "Unbounded Inaccurate",
+        }
 
         if status == 10:
             warnings.warn("Solved/Inaccurate.")
         elif status < 0:
             raise SolverError("Solver ecos errored.")
         if status not in [0, 10]:
-            raise SolverError("Solver ecos returned status %s" %
-                              STATUS_LOOKUP[status])
+            raise SolverError("Solver ecos returned status %s" % STATUS_LOOKUP[status])
 
         # Convert ECOS info into SCS info to be compatible if called from
         # CVXPY DIFFCP solver
-        ECOS2SCS_STATUS_MAP = {0: "Solved", 1: "Infeasible", 2: "Unbounded",
-                               10: "Solved/Inaccurate",
-                               11: "Infeasible/Inaccurate",
-                               12: "Unbounded/Inaccurate"}
-        result['info'] = {'status': ECOS2SCS_STATUS_MAP.get(status, "Failure"),
-                          'solveTime': solution['info']['timing']['tsolve'],
-                          'setupTime': solution['info']['timing']['tsetup'],
-                          'iter': solution['info']['iter'],
-                          'pobj': solution['info']['pcost']}
+        ECOS2SCS_STATUS_MAP = {
+            0: "Solved",
+            1: "Infeasible",
+            2: "Unbounded",
+            10: "Solved/Inaccurate",
+            11: "Infeasible/Inaccurate",
+            12: "Unbounded/Inaccurate",
+        }
+        result["info"] = {
+            "status": ECOS2SCS_STATUS_MAP.get(status, "Failure"),
+            "solveTime": solution["info"]["timing"]["tsolve"],
+            "setupTime": solution["info"]["timing"]["tsetup"],
+            "iter": solution["info"]["iter"],
+            "pobj": solution["info"]["pcost"],
+        }
     elif solve_method == "Clarabel":
         # for now set P to 0
         P = sparse.csc_matrix((c.size, c.size))
@@ -422,7 +471,7 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
         for key, value in kwargs.items():
             setattr(settings, key, value)
 
-        solver = clarabel.DefaultSolver(P,c,A,b,cones,settings)
+        solver = clarabel.DefaultSolver(P, c, A, b, cones, settings)
         solution = solver.solve()
 
         result = {}
@@ -448,6 +497,16 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
             "iter": solution.iterations,
             "pobj": solution.obj_val,
         }
+    elif solve_method == "local_cert":
+        result = {}
+        x = kwargs["local_soln"]
+        # TODO can compute certificate here with A,b, and c if necessary
+        H, multipliers = kwargs["local_cert"]
+        # Convert to expected forms
+        result["x"] = multipliers
+        result["y"] = cone_lib.vec_symm(x @ x.T)
+        result["s"] = cone_lib.vec_symm(H)
+        x, y, s = result["x"], result["y"], result["s"]
     else:
         raise ValueError("Solver %s not supported." % solve_method)
 
@@ -459,11 +518,13 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
     z = (x, y - s, np.array([1]))
     u, v, w = z
 
-    Q = sparse.bmat([
-        [None, A.T, np.expand_dims(c, - 1)],
-        [-A, None, np.expand_dims(b, -1)],
-        [-np.expand_dims(c, -1).T, -np.expand_dims(b, -1).T, None]
-    ])
+    Q = sparse.bmat(
+        [
+            [None, A.T, np.expand_dims(c, -1)],
+            [-A, None, np.expand_dims(b, -1)],
+            [-np.expand_dims(c, -1).T, -np.expand_dims(b, -1).T, None],
+        ]
+    )
 
     D_proj_dual_cone = _diffcp.dprojection(v, cones_parsed, True)
     if mode == "dense":
@@ -487,11 +548,13 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
            NumPy arrays dx, dy, ds, the result of applying the derivative
            to the perturbations.
         """
-        dQ = sparse.bmat([
-            [None, dA.T, np.expand_dims(dc, - 1)],
-            [-dA, None, np.expand_dims(db, -1)],
-            [-np.expand_dims(dc, -1).T, -np.expand_dims(db, -1).T, None]
-        ])
+        dQ = sparse.bmat(
+            [
+                [None, dA.T, np.expand_dims(dc, -1)],
+                [-dA, None, np.expand_dims(db, -1)],
+                [-np.expand_dims(dc, -1).T, -np.expand_dims(db, -1).T, None],
+            ]
+        )
         rhs = dQ @ pi_z
         if np.allclose(rhs, 0):
             dz = np.zeros(rhs.size)
@@ -500,8 +563,12 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
         elif mode == "lsqr":
             dz = _diffcp.lsqr(M, rhs).solution
         elif mode == "lsmr":
-            M_sp = sparse.linalg.LinearOperator(dQ.shape, matvec=M.matvec, rmatvec=M.rmatvec)
-            dz, istop, itn, normr, normar, norma, conda, normx = sparse.linalg.lsmr(M_sp, rhs, maxiter=10*M_sp.shape[0], atol=1e-12, btol=1e-12)
+            M_sp = sparse.linalg.LinearOperator(
+                dQ.shape, matvec=M.matvec, rmatvec=M.rmatvec
+            )
+            dz, istop, itn, normr, normar, norma, conda, normx = sparse.linalg.lsmr(
+                M_sp, rhs, maxiter=10 * M_sp.shape[0], atol=1e-12, btol=1e-12
+            )
 
         du, dv, dw = np.split(dz, [n, n + m])
         dx = du - x * dw
@@ -522,7 +589,8 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
 
         dw = -(x @ dx + y @ dy + s @ ds)
         dz = np.concatenate(
-            [dx, D_proj_dual_cone.rmatvec(dy + ds) - ds, np.array([dw])])
+            [dx, D_proj_dual_cone.rmatvec(dy + ds) - ds, np.array([dw])]
+        )
 
         if np.allclose(dz, 0):
             r = np.zeros(dz.shape)
@@ -531,12 +599,16 @@ def solve_and_derivative_internal(A, b, c, cone_dict, solve_method=None,
         elif mode == "lsqr":
             r = _diffcp.lsqr(MT, dz).solution
         elif mode == "lsmr":
-            MT_sp = sparse.linalg.LinearOperator(dz.shape*2, matvec=MT.matvec, rmatvec=MT.rmatvec)
-            r, istop, itn, normr, normar, norma, conda, normx = sparse.linalg.lsmr(MT_sp, dz, maxiter=10*MT_sp.shape[0], atol=1e-10, btol=1e-10)
+            MT_sp = sparse.linalg.LinearOperator(
+                dz.shape * 2, matvec=MT.matvec, rmatvec=MT.rmatvec
+            )
+            r, istop, itn, normr, normar, norma, conda, normx = sparse.linalg.lsmr(
+                MT_sp, dz, maxiter=10 * MT_sp.shape[0], atol=1e-10, btol=1e-10
+            )
 
         values = pi_z[cols] * r[rows + n] - pi_z[n + rows] * r[cols]
         dA = sparse.csc_matrix((values, (rows, cols)), shape=A.shape)
-        db = pi_z[n:n + m] * r[-1] - pi_z[-1] * r[n:n + m]
+        db = pi_z[n : n + m] * r[-1] - pi_z[-1] * r[n : n + m]
         dc = pi_z[:n] * r[-1] - pi_z[-1] * r[:n]
 
         return dA, db, dc
