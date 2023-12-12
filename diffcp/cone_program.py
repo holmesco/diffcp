@@ -497,16 +497,12 @@ def solve_and_derivative_internal(
             "iter": solution.iterations,
             "pobj": solution.obj_val,
         }
-    elif solve_method == "local_cert":
-        result = {}
-        x = kwargs["local_soln"]
-        # TODO can compute certificate here with A,b, and c if necessary
-        H, multipliers = kwargs["local_cert"]
-        # Convert to expected forms
-        result["x"] = multipliers
-        result["y"] = cone_lib.vec_symm(x @ x.T)
-        result["s"] = cone_lib.vec_symm(H)
-        x, y, s = result["x"], result["y"], result["s"]
+    elif solve_method == "external":
+        result = kwargs["ext_vars"]
+        x = result["x"]
+        y = result["y"]
+        s = result["s"]
+
     else:
         raise ValueError("Solver %s not supported." % solve_method)
 
