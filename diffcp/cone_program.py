@@ -23,10 +23,19 @@ def pi(z, cones):
     return np.concatenate([u, cone_lib.pi(v, cones, dual=True), np.maximum(w, 0)])
 
 
-def solve_and_derivative_wrapper(A, b, c, cone_dict, warm_start, mode, kwargs):
+def solve_and_derivative_wrapper(
+    A, b, c, cone_dict, warm_start, mode, ext_vars, kwargs
+):
     """A wrapper around solve_and_derivative for the batch function."""
     return solve_and_derivative(
-        A, b, c, cone_dict, warm_start=warm_start, mode=mode, **kwargs
+        A,
+        b,
+        c,
+        cone_dict,
+        warm_start=warm_start,
+        mode=mode,
+        ext_vars=ext_vars,
+        **kwargs,
     )
 
 
@@ -39,7 +48,7 @@ def solve_and_derivative_batch(
     n_jobs_backward=-1,
     mode="lsqr",
     warm_starts=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Solves a batch of cone programs and returns a function that
@@ -82,12 +91,25 @@ def solve_and_derivative_batch(
         n_jobs_backward = mp.cpu_count()
     n_jobs_forward = min(batch_size, n_jobs_forward)
     n_jobs_backward = min(batch_size, n_jobs_backward)
+    # Check for external solver solution injection
+    if "ext_vars_list" in kwargs:
+        ext_vars_list = kwargs.pop("ext_vars_list")
+    else:
+        ext_vars_list = [None] * batch_size
+
     if n_jobs_forward == 1:
         # serial
         xs, ys, ss, Ds, DTs = [], [], [], [], []
         for i in range(batch_size):
             x, y, s, D, DT = solve_and_derivative(
-                As[i], bs[i], cs[i], cone_dicts[i], warm_starts[i], mode=mode, **kwargs
+                As[i],
+                bs[i],
+                cs[i],
+                cone_dicts[i],
+                warm_starts[i],
+                mode=mode,
+                ext_vars=ext_vars_list[i],
+                **kwargs,
             )
             xs += [x]
             ys += [y]
@@ -98,9 +120,9 @@ def solve_and_derivative_batch(
         # thread pool
         pool = ThreadPool(processes=n_jobs_forward)
         args = [
-            (A, b, c, cone_dict, warm_start, mode, kwargs)
-            for A, b, c, cone_dict, warm_start in zip(
-                As, bs, cs, cone_dicts, warm_starts
+            (A, b, c, cone_dict, warm_start, mode, ext_vars, kwargs)
+            for A, b, c, cone_dict, warm_start, ext_vars in zip(
+                As, bs, cs, cone_dicts, warm_starts, ext_vars_list
             )
         ]
         with threadpool_limits(limits=1):
@@ -168,7 +190,15 @@ class SolverError(Exception):
 
 
 def solve_and_derivative(
-    A, b, c, cone_dict, warm_start=None, mode="lsqr", solve_method="SCS", **kwargs
+    A,
+    b,
+    c,
+    cone_dict,
+    warm_start=None,
+    mode="lsqr",
+    solve_method="SCS",
+    ext_vars={},
+    **kwargs,
 ):
     """Solves a cone program, returns its derivative as an abstract linear map.
 
@@ -212,6 +242,7 @@ def solve_and_derivative(
       mode: (optional) Which mode to compute derivative with, options are
           ["dense", "lsqr", "lsmr"].
       solve_method: (optional) Name of solver to use; SCS, ECOS, or Clarabel.
+      ext_vars: (optional) Dictionary of external solver variables.
       kwargs: (optional) Keyword arguments to send to the solver.
 
     Returns:
@@ -240,7 +271,8 @@ def solve_and_derivative(
         warm_start=warm_start,
         mode=mode,
         solve_method=solve_method,
-        **kwargs
+        ext_vars=ext_vars,
+        **kwargs,
     )
     x = result["x"]
     y = result["y"]
@@ -258,8 +290,9 @@ def solve_and_derivative_internal(
     solve_method=None,
     warm_start=None,
     mode="lsqr",
+    ext_vars={},
     raise_on_error=True,
-    **kwargs
+    **kwargs,
 ):
     if mode not in ["dense", "lsqr", "lsmr"]:
         raise ValueError(
@@ -498,7 +531,7 @@ def solve_and_derivative_internal(
             "pobj": solution.obj_val,
         }
     elif solve_method == "external":
-        result = kwargs["ext_vars"]
+        result = ext_vars
         x = result["x"]
         y = result["y"]
         s = result["s"]
